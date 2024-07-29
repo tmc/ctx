@@ -205,18 +205,13 @@ func printExecutionPlan(plan []string) error {
 func executePlugins(ctx context.Context, plan []string) (map[string]interface{}, error) {
 	result := make(map[string]interface{})
 	for _, pluginName := range plan {
-		cmd := exec.CommandContext(ctx, "ctx-"+pluginName)
+		cmd := exec.CommandContext(ctx, pluginName)
 		output, err := cmd.Output()
 		if err != nil {
 			return nil, fmt.Errorf("error executing plugin %s: %w", pluginName, err)
 		}
 
-		var pluginResult map[string]interface{}
-		if err := json.Unmarshal(output, &pluginResult); err != nil {
-			return nil, fmt.Errorf("error parsing output from plugin %s: %w", pluginName, err)
-		}
-
-		result[pluginName] = pluginResult
+		result[pluginName] = string(output)
 	}
 	return result, nil
 }
