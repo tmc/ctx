@@ -20,7 +20,6 @@ const version = "0.1.0"
 
 type Config struct {
 	Plugins        []string `yaml:"plugins"`
-	SecurityLevel  string   `yaml:"security_level"`
 	OutputFormat   string   `yaml:"output_format"`
 	TokenLimit     int      `yaml:"token_limit"`
 	ConfigFilePath string   `yaml:"config_file_path"`
@@ -43,7 +42,6 @@ func run() error {
 	flag.StringVar(&config.ConfigFilePath, "config", "", "Path to configuration file")
 	listPlugins := flag.Bool("list-plugins", false, "Show available plugins")
 	printPluginSpec := flag.Bool("print-plugin-spec", false, "Print plugin specification")
-	flag.StringVar(&config.SecurityLevel, "security", "medium", "Set security level (low, medium, high)")
 	flag.StringVar(&config.OutputFormat, "output", "yaml", "Set output format (text, json, yaml, markdown)")
 	showVersion := flag.Bool("version", false, "Display version information")
 	dryRun := flag.Bool("dry-run", false, "Preview actions without executing")
@@ -93,7 +91,7 @@ func run() error {
 		return fmt.Errorf("error executing plugins: %w", err)
 	}
 
-	if err := applySecurityFilters(result, config.SecurityLevel); err != nil {
+	if err := applySecurityFilters(result); err != nil {
 		return fmt.Errorf("error applying security filters: %w", err)
 	}
 
@@ -216,7 +214,7 @@ func executePlugins(ctx context.Context, plan []string) (map[string]interface{},
 	return result, nil
 }
 
-func applySecurityFilters(result map[string]interface{}, securityLevel string) error {
+func applySecurityFilters(result map[string]interface{}) error {
 	// Placeholder implementation
 	return nil
 }
