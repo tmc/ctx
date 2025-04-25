@@ -3,7 +3,6 @@ package docs
 
 import (
 	"embed"
-	_ "embed"
 )
 
 //go:embed *.md

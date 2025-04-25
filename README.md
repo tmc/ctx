@@ -1,90 +1,85 @@
-# ctx - Context Gathering Tool for Language Models
+# ctx - Context Gathering Tool
 
-ctx is a flexible and extensible tool designed to gather contextual information primarily for use with Language Models (LLMs). It streamlines the process of providing accurate and comprehensive information to language models.
+`ctx` is a simple, extensible tool to gather contextual information by running plugins. It discovers plugins named `ctx-*` in your PATH, executes them, aggregates their structured JSON output, and prints the combined context in YAML, JSON, or XML formats.
 
-## Table of Contents
-1. [Key Features](#key-features)
-2. [Architecture](#architecture)
-3. [Installation](#installation)
-4. [Usage Examples](#usage-examples)
-5. [Key Plugins](#key-plugins)
-6. [Configuration](#configuration)
-7. [CLI Interface](#cli-interface)
-8. [Plugin Development](#plugin-development)
-9. [Contributing](#contributing)
-10. [Troubleshooting](#troubleshooting)
+This tool is designed with simplicity and clear interfaces in mind. It assigns a `CTX_SESSION` ID and `CTX_SHLVL` to each run, and supports passing configuration settings (like caching directories, operational budgets, timeouts, or allowed tools) to plugins via environment variables.
 
-## Key Features
-
-- **Modular Plugin System**: Easily extendable with custom plugins
-- **Auto-discovery**: Automatically detects programming environment and relevant plugins
-- **Configurable Output**: Supports various output formats (YAML, JSON, plaintext)
-- **Environment-aware**: Gathers information about the current working directory, detected programming languages, and other relevant factors
-- **Flexible Configuration**: Configurable via command-line flags, environment variables, or configuration files
-- **Dry Run Capability**: Preview ctx's actions without executing plugins or gathering real data
-
-## Architecture
-
-ctx follows a three-phase execution model:
-
-1. **Discovery Phase**: Searches for plugins with the `ctx-` prefix in the system PATH and gathers initial environment information.
-2. **Planning Phase**: Analyzes discovered plugins, considers user-provided hints, and generates a comprehensive plan for context gathering.
-3. **Execution Phase**: Follows the generated plan, executes plugins, collects context information, and formats the output.
-
-For more details, see [ARCHITECTURE.md](docs/ARCHITECTURE.md).
+See `docs/PLUGIN_SPEC.md` for mandatory plugin requirements and details on optional conventions like environment variables and metadata reporting. Use `ctx --print-spec` to view the specification directly.
 
 ## Installation
 
 ```bash
+# Replace with your actual repo path before publishing
+# Build using Go 1.18+ for debug.ReadBuildInfo support
 go install github.com/tmc/ctx/cmd/ctx@latest
 ```
 
-For more detailed installation instructions, see [INSTALLATION.md](docs/INSTALLATION.md).
+## Usage
 
-## Usage Examples
-
+Gather context (default output: YAML):
 ```bash
-# Gather context for the current directory
-ctx
+ctx```
 
-# Gather context and output as JSON
-ctx --output json
-
-# Perform a dry run
-ctx --dry-run
-
-# Use specific plugins
-ctx --plugins git,src,env
+Pass configuration and get XML output (example):
+```bash
+ctx --output-token-budget=2000 --cost-budget=50 --plugin-timeout=15s --output xml
 ```
 
-## Key Plugins
+Get compact JSON output:
+```bash
+ctx --output json --summary```
 
-- ctx-git: Gathers information about the current git repository, including branch, commits, and configuration.
-- ctx-src: Analyzes the file system to gather information about the source code structure and contents.
-- ctx-env: Collects relevant environment variables that may impact the context.
-- ctx-src-languages: Detects the programming languages used in the source code and provides language-specific insights.
-- ctx-src-python: Gathers detailed information about Python source code, including imports, classes, and functions.
+List discovered plugins:
+```bash
+ctx --list-plugins
+```
 
-## Configuration
+Print the plugin specification:
+```bash
+ctx --print-spec
+```
 
-ctx can be configured using:
-- Command-line flags
-- Environment variables
-- Configuration files
+Display version information (dynamically read from build info):
+```bash
+ctx --version
+```
 
+## Configuration Flags
 
-## CLI Interface
+`ctx` accepts flags to control its behavior and pass configuration down to plugins via `CTX_*` environment variables:
 
-Run `ctx --help` for a list of available commands and options.
+*   `--output`: Output format (`yaml`, `json`, or `xml`, default: `yaml`).
+*   `--list-plugins`: List discovered plugins and exit.
+*   `--version`: Show version information derived from build metadata.
+*   `--print-spec`: Print the plugin specification (`docs/PLUGIN_SPEC.md`) to stdout and exit.
+*   `--cache-dir`: Specify a directory for plugins to use for caching (sets `CTX_CACHE_DIR` for plugins). Defaults to `$XDG_CACHE_HOME/ctx` or disabled if unset/unwritable.
+*   `--output-token-budget`: Inform plugins of an estimated token budget for their primary output (sets `CTX_OUTPUT_TOKEN_BUDGET`).
+*   `--thinking-token-budget`: Inform plugins of an estimated token budget for internal 'thinking' or intermediate steps (sets `CTX_THINKING_TOKEN_BUDGET`).
+*   `--cost-budget`: Inform plugins of an estimated cost budget in USD cents (sets `CTX_COST_BUDGET_CENTS`).
+*   `--allowed-tools`: Comma-separated list of external commands plugins are permitted to call (sets `CTX_ALLOWED_TOOLS`).
+*   `--plugin-timeout`: Suggests a timeout duration for plugin execution (e.g., "30s", "1m"). Sets `CTX_TIMEOUT_SECONDS` and `CTX_DEADLINE_TIMESTAMP`.
+*   `--plugin-retries`: Suggests a maximum number of retries for plugins (sets `CTX_RETRY_MAX`).
+*   `-P, --parallel`: Maximum number of plugins to run in parallel (default: 1). This limits resource usage and prevents potential fork bombs.
+*   `--indent`: Number of spaces for JSON/XML output indentation (default: 2).
+*   `--summary`: Output compact JSON/XML without indentation (overrides --indent).
+*   `--show-source`: Request plugins to include their source code in txtar format (sets `CTX_SHOW_SOURCE=true`). When using txtar format, any '-- filename --' directives in source files are escaped as '\-- filename --'.
+*   `-v`: Enable verbose logging for debugging.
 
-## Plugin Development
+(Note: Implementation of plugin behavior based on `CTX_*` variables resides within the individual plugins.)
 
-For information on developing plugins for ctx, see [PLUGIN_SPEC.md](docs/PLUGIN_SPEC.md).
+## Plugins
+
+Plugins are executables starting with `ctx-` located in your system's PATH. They MUST adhere to the contract defined in `docs/PLUGIN_SPEC.md`, primarily outputting structured JSON.
+
+`ctx` propagates `CTX_SESSION`, `CTX_SHLVL`, standard OpenTelemetry context (`TRACEPARENT`, `TRACESTATE`), and MAY set specific `CTX_*` configuration variables (e.g., `CTX_CACHE_DIR`, `CTX_TIMEOUT_SECONDS`) in the plugin's environment based on its own flags or configuration. Plugins MAY also optionally return structured metadata (like usage metrics or schema info) in their JSON output. See `docs/PLUGIN_SPEC.md` for details on both required and optional interactions, including incubating features like plugin integrity checks.
+
+**Note on Existing Standalone Tools:** Tools like `ctx-exec` or `ctx-go-doc` from the `misc/ctx-plugins` repository have different output formats and are not directly compatible as plugins for this `ctx` runner. To use them, create simple **wrapper plugins** (e.g., `ctx-wrapper-exec`) that call the original tool and transform its output into the JSON format required by `docs/PLUGIN_SPEC.md`.
 
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guidelines](docs/CONTRIBUTING.md) for more information on how to get started, report bugs, or request features.
+Contributions are welcome. Please focus on maintaining simplicity, clarity, and adherence to the defined specifications.
 
 ## License
 
-See [LICENSE](LICENSE) for details.
+ISC License. See [LICENSE](LICENSE).
+
